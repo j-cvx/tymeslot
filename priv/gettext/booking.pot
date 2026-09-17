@@ -1226,6 +1226,9 @@ msgstr ""
 msgid "Too many booking attempts. Please try again later."
 msgstr ""
 
+msgid "You already have a booking with us. To change it, use the link in your confirmation email."
+msgstr ""
+
 #: lib/tymeslot_web/live/scheduling/handlers/booking_guards.ex
 #, elixir-autogen, elixir-format
 msgid "Your booking is already being processed. Please wait..."

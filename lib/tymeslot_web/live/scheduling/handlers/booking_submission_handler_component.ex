@@ -42,6 +42,8 @@ defmodule TymeslotWeb.Live.Scheduling.Handlers.BookingSubmissionHandlerComponent
   alias TymeslotWeb.Live.Scheduling.BookingConfig
   alias TymeslotWeb.Live.Scheduling.Handlers.BookingErrorMessage
   alias TymeslotWeb.Live.Scheduling.Handlers.BookingGuards
+  alias TymeslotWeb.Live.Scheduling.Handlers.OneBookingPerPerson
+  alias TymeslotWeb.Helpers.ClientIP
   alias TymeslotWeb.Live.Shared.Flash
 
   require Logger
@@ -229,6 +231,13 @@ defmodule TymeslotWeb.Live.Scheduling.Handlers.BookingSubmissionHandlerComponent
   end
 
   defp handle_submit_result(socket, result, sanitized_params) do
+    # convexe fork: a booking now exists for this IP (see OneBookingPerPerson)
+    if match?({:ok, _}, result) or match?({:ok, :payment_required, _}, result) do
+      unless socket.assigns[:is_rescheduling] or socket.assigns[:owner_preview] == true do
+        OneBookingPerPerson.record(ClientIP.get(socket))
+      end
+    end
+
     case result do
       {:ok, :payment_required, %{meeting: meeting, checkout_url: url}} ->
         handle_payment_required(socket, meeting, url, sanitized_params)

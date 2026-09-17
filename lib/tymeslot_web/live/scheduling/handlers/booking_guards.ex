@@ -45,6 +45,7 @@ defmodule TymeslotWeb.Live.Scheduling.Handlers.BookingGuards do
   alias Tymeslot.Security.RateLimiter
   alias Tymeslot.Security.SecurityLogger
   alias TymeslotWeb.Helpers.ClientIP
+  alias TymeslotWeb.Live.Scheduling.Handlers.OneBookingPerPerson
   alias TymeslotWeb.Live.Shared.Flash
 
   require Logger
@@ -63,8 +64,41 @@ defmodule TymeslotWeb.Live.Scheduling.Handlers.BookingGuards do
   def run(socket, sanitized_params, raw_params) do
     with {:ok, socket} <- check_duplicate_submission(socket),
          {:ok, socket} <- check_rate_limit(socket),
-         :ok <- verify_recaptcha(socket, raw_params) do
-      check_recipient_rate_limit(socket, sanitized_params)
+         :ok <- verify_recaptcha(socket, raw_params),
+         {:ok, socket} <- check_recipient_rate_limit(socket, sanitized_params) do
+      check_one_booking_per_person(socket, sanitized_params)
+    end
+  end
+
+  # convexe fork: see `OneBookingPerPerson`.
+  defp check_one_booking_per_person(socket, params) do
+    email = if is_map(params), do: Map.get(params, "email"), else: nil
+
+    cond do
+      preview_submission?(socket) or socket.assigns[:is_rescheduling] ->
+        {:ok, socket}
+
+      OneBookingPerPerson.allowed?(ClientIP.get(socket), email) ->
+        {:ok, socket}
+
+      true ->
+        Logger.warning("Booking refused: this person already has a booking",
+          operation: "booking",
+          limit_type: "one_per_person"
+        )
+
+        socket =
+          socket
+          |> release_submission()
+          |> Flash.put_flash(
+            :error,
+            dgettext(
+              "booking",
+              "You already have a booking with us. To change it, use the link in your confirmation email."
+            )
+          )
+
+        {:error, socket}
     end
   end
 
